@@ -179,8 +179,8 @@
   </div>
 
   <div id="hint">
-    Click objects to interact<br>
-    Drag to orbit · Scroll to zoom
+    WASD to move · Drag to look · Scroll to zoom<br>
+    Click objects to interact
   </div>
 
   <div id="about-btn" title="About this demo">?</div>
@@ -206,6 +206,27 @@
       <span class="about-tag">ACESFilmic tonemapping</span>
     </div>
     <p style="color:#907860; font-size:12px;">Designed &amp; generated entirely by <a href="https://claude.ai" target="_blank">Claude (Anthropic)</a>.</p>
+    <p style="margin-top:10px;">
+      <a href="https://github.com/adrianhensler/three-js-room-demo/blob/main/index.html" target="_blank"
+         style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px;
+                background:rgba(255,180,60,0.1); border:1px solid rgba(255,180,60,0.35);
+                border-radius:5px; color:#f0c878; font-size:12px; text-decoration:none;
+                transition:background 0.2s;"
+         onmouseover="this.style.background='rgba(255,180,60,0.22)'"
+         onmouseout="this.style.background='rgba(255,180,60,0.1)'">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+                   0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+                   -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+                   .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+                   -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+                   .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+                   .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+                   0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        View source on GitHub
+      </a>
+    </p>
   </div>
 </div>
 
@@ -236,14 +257,23 @@ const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1, 0);
 controls.minPolarAngle = Math.PI * 0.2;
 controls.maxPolarAngle = Math.PI * 0.5;
-controls.minAzimuthAngle = -Math.PI * 0.25;
-controls.maxAzimuthAngle = Math.PI * 0.25;
 controls.enablePan = false;
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 3;
 controls.maxDistance = 9;
 controls.update();
+
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+const _fwd   = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _move  = new THREE.Vector3();
+const _up    = new THREE.Vector3(0, 1, 0);
+const MOVE_SPEED = 0.05;
+const BOUNDS = { minX: -3.5, maxX: 3.5, minZ: -3.0, maxZ: 3.0 };
 
 // ── Lights ────────────────────────────────────────────────────────────────────
 const ambientLight = new THREE.AmbientLight(0x3a2d1e, 0.4);
@@ -461,7 +491,7 @@ bladesGroup.position.set(0, -0.56, 0);
 fanGroup.add(bladesGroup);
 // 4 blades
 for (let i = 0; i < 4; i++) {
-  const blade = box(0.7, 0.03, 0.14, mat(0xc0a060, 0.7), 0.42, 0, 0);
+  const blade = box(0.9, 0.03, 0.15, mat(0xc0a060, 0.7), 0.60, 0, 0);
   blade.rotation.y = (i / 4) * Math.PI * 2;
   blade.castShadow = true;
   bladesGroup.add(blade);
@@ -563,6 +593,8 @@ function updateUI() {
   document.getElementById('dot-note').classList.toggle('on', state.noteRead);
   document.getElementById('obj-count').textContent = countInteracted() + '/4';
 }
+
+updateUI();
 
 function showCompletion() {
   const banner = document.getElementById('completion-banner');
@@ -756,6 +788,22 @@ function animate() {
     if (Math.abs(pos[i3+2]) > 3.2) velocities[i3+2] *= -1;
   }
   particleGeo.attributes.position.needsUpdate = true;
+
+  if (keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD']) {
+    _fwd.subVectors(controls.target, camera.position).setY(0).normalize();
+    _right.crossVectors(_fwd, _up).normalize();
+    _move.set(0, 0, 0);
+    if (keys['KeyW']) _move.addScaledVector(_fwd,   MOVE_SPEED);
+    if (keys['KeyS']) _move.addScaledVector(_fwd,  -MOVE_SPEED);
+    if (keys['KeyA']) _move.addScaledVector(_right, -MOVE_SPEED);
+    if (keys['KeyD']) _move.addScaledVector(_right,  MOVE_SPEED);
+    camera.position.add(_move);
+    controls.target.add(_move);
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, BOUNDS.minX, BOUNDS.maxX);
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, BOUNDS.minZ, BOUNDS.maxZ);
+    controls.target.x = THREE.MathUtils.clamp(controls.target.x, BOUNDS.minX, BOUNDS.maxX);
+    controls.target.z = THREE.MathUtils.clamp(controls.target.z, BOUNDS.minZ, BOUNDS.maxZ);
+  }
 
   controls.update();
   renderer.render(scene, camera);
