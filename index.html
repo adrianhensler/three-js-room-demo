@@ -491,10 +491,12 @@ bladesGroup.position.set(0, -0.56, 0);
 fanGroup.add(bladesGroup);
 // 4 blades
 for (let i = 0; i < 4; i++) {
+  const bladeWrapper = new THREE.Group();
+  bladeWrapper.rotation.y = (i / 4) * Math.PI * 2;
   const blade = box(0.9, 0.03, 0.15, mat(0xc0a060, 0.7), 0.60, 0, 0);
-  blade.rotation.y = (i / 4) * Math.PI * 2;
   blade.castShadow = true;
-  bladesGroup.add(blade);
+  bladeWrapper.add(blade);
+  bladesGroup.add(bladeWrapper);
 }
 // Globe light
 const globeGeo = new THREE.SphereGeometry(0.15, 12, 12);
