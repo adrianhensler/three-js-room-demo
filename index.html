@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cozy 3D Room</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #1a1208; font-family: 'Georgia', serif; }
+  canvas { display: block; }
+
+  #ui {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 10;
+  }
+
+  #status-panel {
+    position: absolute; top: 20px; left: 20px;
+    background: rgba(10, 8, 4, 0.75);
+    border: 1px solid rgba(255, 180, 80, 0.3);
+    border-radius: 8px; padding: 14px 18px;
+    color: #d4b896; font-size: 13px; line-height: 1.8;
+    backdrop-filter: blur(4px);
+  }
+  #status-panel h3 {
+    color: #f0c878; font-size: 14px; margin-bottom: 8px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .status-row { display: flex; align-items: center; gap: 8px; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #3a3020; border: 1px solid #6a5840;
+    transition: all 0.4s ease;
+  }
+  .dot.on {
+    background: #ffcc44;
+    border-color: #ffaa22;
+    box-shadow: 0 0 6px #ffcc44, 0 0 12px rgba(255, 180, 60, 0.5);
+  }
+
+  #objective {
+    position: absolute; top: 20px; right: 20px;
+    background: rgba(10, 8, 4, 0.75);
+    border: 1px solid rgba(255, 180, 80, 0.3);
+    border-radius: 8px; padding: 12px 16px;
+    color: #d4b896; font-size: 13px;
+    backdrop-filter: blur(4px); text-align: right;
+  }
+  #obj-count { color: #f0c878; font-size: 22px; font-weight: bold; }
+
+  #hover-label {
+    position: absolute; display: none;
+    background: rgba(10, 8, 4, 0.85);
+    border: 1px solid rgba(255, 180, 80, 0.4);
+    border-radius: 5px; padding: 5px 10px;
+    color: #f0c878; font-size: 12px;
+    pointer-events: none; white-space: nowrap;
+    transform: translate(12px, -50%);
+  }
+
+  #info-panel {
+    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(15, 10, 4, 0.92);
+    border: 1px solid rgba(255, 180, 80, 0.4);
+    border-radius: 10px; padding: 20px 24px;
+    color: #d4b896; font-size: 14px; line-height: 1.7;
+    max-width: 420px; width: 90%;
+    display: none; pointer-events: auto;
+    backdrop-filter: blur(6px);
+  }
+  #info-panel h4 { color: #f0c878; margin-bottom: 8px; font-size: 15px; }
+  #info-panel p { font-style: italic; color: #c0a880; }
+  #close-btn {
+    margin-top: 14px; padding: 6px 16px;
+    background: rgba(255, 180, 60, 0.15);
+    border: 1px solid rgba(255, 180, 60, 0.4);
+    border-radius: 4px; color: #f0c878;
+    cursor: pointer; font-size: 12px;
+    transition: background 0.2s;
+  }
+  #close-btn:hover { background: rgba(255, 180, 60, 0.3); }
+
+  #completion-banner {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 8, 4, 0.95);
+    border: 1px solid rgba(255, 200, 80, 0.6);
+    border-radius: 12px; padding: 30px 40px;
+    color: #f0c878; text-align: center;
+    display: none; opacity: 0;
+    transition: opacity 0.8s ease;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+  }
+  #completion-banner h2 { font-size: 22px; margin-bottom: 8px; }
+  #completion-banner p { color: #d4b896; font-size: 14px; }
+
+  #hint {
+    position: absolute; bottom: 20px; right: 20px;
+    color: rgba(180, 150, 100, 0.5); font-size: 11px;
+    text-align: right; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="status-panel">
+    <h3>Room Status</h3>
+    <div class="status-row"><div class="dot" id="dot-fan"></div><span>Ceiling Fan</span></div>
+    <div class="status-row"><div class="dot" id="dot-lamp"></div><span>Floor Lamp</span></div>
+    <div class="status-row"><div class="dot" id="dot-drawer"></div><span>Drawer</span></div>
+    <div class="status-row"><div class="dot" id="dot-note"></div><span>Framed Note</span></div>
+  </div>
+
+  <div id="objective">
+    <div id="obj-count">0/4</div>
+    <div>objects found</div>
+  </div>
+
+  <div id="hover-label"></div>
+
+  <div id="info-panel">
+    <h4>A Framed Note</h4>
+    <p>"In the quiet of a room like this, time slows to a gentle hum.<br>
+    The dust motes know something we've forgotten —<br>
+    that stillness is not emptiness, but presence."</p>
+    <br>
+    <p style="font-size:12px; color:#907860;">— found tucked behind a cushion, undated</p>
+    <button id="close-btn">Close</button>
+  </div>
+
+  <div id="completion-banner">
+    <h2>Room Explored</h2>
+    <p>You've discovered all 4 hidden interactions.<br>The room holds no more secrets — for now.</p>
+  </div>
+
+  <div id="hint">
+    Click objects to interact<br>
+    Drag to orbit · Scroll to zoom
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ── Renderer ──────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+// ── Scene & Camera ────────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1208);
+scene.fog = new THREE.Fog(0x1a1208, 10, 22);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 50);
+camera.position.set(5, 3.5, 5.5);
+camera.lookAt(0, 1, 0);
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1, 0);
+controls.minPolarAngle = Math.PI * 0.2;
+controls.maxPolarAngle = Math.PI * 0.5;
+controls.minAzimuthAngle = -Math.PI * 0.25;
+controls.maxAzimuthAngle = Math.PI * 0.25;
+controls.enablePan = false;
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 3;
+controls.maxDistance = 9;
+controls.update();
+
+// ── Lights ────────────────────────────────────────────────────────────────────
+const ambientLight = new THREE.AmbientLight(0x3a2d1e, 0.4);
+scene.add(ambientLight);
+
+const lampLight = new THREE.PointLight(0xffaa44, 0, 8);
+lampLight.position.set(-2.6, 2.0, 1.0);
+lampLight.castShadow = true;
+lampLight.shadow.mapSize.set(512, 512);
+lampLight.shadow.camera.near = 0.1;
+lampLight.shadow.camera.far = 10;
+scene.add(lampLight);
+
+const fanLight = new THREE.PointLight(0xffddaa, 0, 7);
+fanLight.position.set(0, 2.8, 0);
+fanLight.castShadow = false;
+scene.add(fanLight);
+
+const moonLight = new THREE.SpotLight(0x8899dd, 0.8, 12, Math.PI / 6, 0.4);
+moonLight.position.set(3.8, 2.2, -1.5);
+moonLight.target.position.set(1.5, 0, 0.5);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(512, 512);
+scene.add(moonLight);
+scene.add(moonLight.target);
+
+// ── Materials ─────────────────────────────────────────────────────────────────
+function mat(color, roughness = 0.8, metalness = 0.0, emissive = 0x000000) {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive });
+}
+
+const floorMat  = mat(0x5c4830, 0.9);
+const ceilMat   = mat(0xd4c4a8, 0.95);
+const wallMat   = mat(0xc8b898, 0.95);
+const wallDarkMat = mat(0xb0a080, 0.95);
+const trimMat   = mat(0xf0e8d0, 0.7);
+const rugMat    = mat(0x7a3030, 0.95); rugMat.emissive = new THREE.Color(0x200808);
+const woodMat   = mat(0x6b4c2a, 0.85);
+const darkWoodMat = mat(0x4a3018, 0.9);
+const fabricMat = mat(0x4a5560, 0.95);
+const cushionMat = mat(0x6a7585, 0.9);
+const shadeMat  = mat(0xf0d080, 0.7); // floor lamp shade
+shadeMat.emissive = new THREE.Color(0x000000);
+const globeMat  = mat(0xffeedd, 0.3); // fan globe
+globeMat.emissive = new THREE.Color(0x000000);
+const bookMats  = [0x8b2020, 0x204080, 0x206020, 0x806020, 0x602060].map(c => mat(c, 0.8));
+const notePaperMat = mat(0xf5e8c0, 0.85);
+notePaperMat.emissive = new THREE.Color(0x000000);
+const noteFrameMat = mat(0x8b6020, 0.7);
+
+// ── Geometry helpers ──────────────────────────────────────────────────────────
+function box(w, h, d, material, x = 0, y = 0, z = 0) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+function addBox(w, h, d, material, x, y, z, parent = scene) {
+  const m = box(w, h, d, material, x, y, z);
+  parent.add(m);
+  return m;
+}
+
+// ── Room Shell ────────────────────────────────────────────────────────────────
+const RW = 8, RH = 3.2, RD = 7;
+const floor = addBox(RW, 0.12, RD, floorMat, 0, -0.06, 0);
+const ceil  = addBox(RW, 0.1, RD, ceilMat, 0, RH, 0);
+// Back wall
+addBox(RW, RH, 0.12, wallMat, 0, RH/2, -RD/2);
+// Left wall
+addBox(0.12, RH, RD, wallDarkMat, -RW/2, RH/2, 0);
+// Right wall
+addBox(0.12, RH, RD, wallMat, RW/2, RH/2, 0);
+
+// Baseboard trim
+const trimH = 0.12, trimD = 0.06;
+addBox(RW, trimH, trimD, trimMat, 0, trimH/2, -RD/2 + trimD/2); // back
+addBox(RD, trimH, trimD, trimMat, -RW/2 + trimD/2, trimH/2, 0).rotation.y = Math.PI/2;
+addBox(RD, trimH, trimD, trimMat, RW/2 - trimD/2, trimH/2, 0).rotation.y = Math.PI/2;
+
+// Ceiling molding
+const cmH = 0.08;
+addBox(RW, cmH, trimD, trimMat, 0, RH - cmH/2, -RD/2 + trimD/2);
+addBox(RD, cmH, trimD, trimMat, -RW/2 + trimD/2, RH - cmH/2, 0).rotation.y = Math.PI/2;
+
+// Area rug
+addBox(3.2, 0.04, 2.8, rugMat, -0.3, 0.02, 0.5);
+
+// ── Fake Window (right wall) ──────────────────────────────────────────────────
+const windowFrame = new THREE.Group();
+windowFrame.position.set(RW/2 - 0.08, 1.7, -1.5);
+scene.add(windowFrame);
+// Frame
+addBox(0.08, 1.4, 1.0, trimMat, 0, 0, 0, windowFrame);
+// Glass pane (slightly blue)
+const glassMat = mat(0x8899cc, 0.05, 0.0);
+glassMat.transparent = true; glassMat.opacity = 0.25;
+addBox(0.02, 1.1, 0.75, glassMat, -0.01, 0, 0, windowFrame);
+// Cross bars
+addBox(0.04, 0.04, 0.75, trimMat, 0, 0, 0, windowFrame);
+addBox(0.04, 1.1, 0.04, trimMat, 0, 0, 0, windowFrame);
+
+// ── Desk + Chair ──────────────────────────────────────────────────────────────
+const deskGroup = new THREE.Group();
+deskGroup.position.set(1.8, 0, -2.6);
+scene.add(deskGroup);
+addBox(1.6, 0.08, 0.75, darkWoodMat, 0, 0.76, 0, deskGroup); // top
+addBox(0.07, 0.74, 0.07, woodMat, -0.74, 0.37, -0.32, deskGroup);
+addBox(0.07, 0.74, 0.07, woodMat, 0.74, 0.37, -0.32, deskGroup);
+addBox(0.07, 0.74, 0.07, woodMat, -0.74, 0.37, 0.32, deskGroup);
+addBox(0.07, 0.74, 0.07, woodMat, 0.74, 0.37, 0.32, deskGroup);
+// Small items on desk
+addBox(0.5, 0.03, 0.35, mat(0xf5f0e0, 0.9), -0.3, 0.815, 0.05, deskGroup); // paper
+addBox(0.06, 0.18, 0.06, mat(0x2244aa, 0.6), 0.55, 0.89, 0.0, deskGroup);  // mug
+
+// Chair
+const chairGroup = new THREE.Group();
+chairGroup.position.set(1.8, 0, -1.8);
+scene.add(chairGroup);
+addBox(0.55, 0.06, 0.5, woodMat, 0, 0.46, 0, chairGroup);  // seat
+addBox(0.55, 0.55, 0.06, woodMat, 0, 0.755, -0.24, chairGroup); // back
+addBox(0.05, 0.44, 0.05, woodMat, -0.24, 0.22, -0.22, chairGroup);
+addBox(0.05, 0.44, 0.05, woodMat, 0.24, 0.22, -0.22, chairGroup);
+addBox(0.05, 0.44, 0.05, woodMat, -0.24, 0.22, 0.22, chairGroup);
+addBox(0.05, 0.44, 0.05, woodMat, 0.24, 0.22, 0.22, chairGroup);
+
+// ── Sofa ─────────────────────────────────────────────────────────────────────
+const sofaGroup = new THREE.Group();
+sofaGroup.position.set(-0.5, 0, 2.2);
+scene.add(sofaGroup);
+addBox(2.4, 0.35, 0.85, fabricMat, 0, 0.175, 0, sofaGroup);   // base
+addBox(2.4, 0.55, 0.18, fabricMat, 0, 0.555, -0.32, sofaGroup); // back
+addBox(0.18, 0.65, 0.85, fabricMat, -1.1, 0.325, 0, sofaGroup); // arm L
+addBox(0.18, 0.65, 0.85, fabricMat, 1.1, 0.325, 0, sofaGroup);  // arm R
+// Cushions
+addBox(1.06, 0.18, 0.5, cushionMat, -0.57, 0.44, 0.1, sofaGroup);
+addBox(1.06, 0.18, 0.5, cushionMat, 0.57, 0.44, 0.1, sofaGroup);
+// Throw pillow
+addBox(0.3, 0.3, 0.1, mat(0xa07040, 0.9), 0.9, 0.7, -0.1, sofaGroup);
+
+// ── Bookshelf (left wall) ─────────────────────────────────────────────────────
+const shelfGroup = new THREE.Group();
+shelfGroup.position.set(-3.85, 0, -1.8);
+shelfGroup.rotation.y = Math.PI / 2;
+scene.add(shelfGroup);
+addBox(0.22, 2.4, 1.0, darkWoodMat, 0, 1.2, 0, shelfGroup);  // back panel
+addBox(0.06, 2.4, 0.06, darkWoodMat, -0.08, 1.2, -0.47, shelfGroup); // side L
+addBox(0.06, 2.4, 0.06, darkWoodMat, -0.08, 1.2, 0.47, shelfGroup);  // side R
+// Shelves
+[0.4, 1.0, 1.6, 2.2].forEach(y => {
+  addBox(0.04, 0.04, 0.9, darkWoodMat, -0.06, y, 0, shelfGroup);
+});
+// Books
+const bkW = [0.08, 0.1, 0.07, 0.09, 0.08, 0.11, 0.07];
+let bkX = -0.46;
+[0, 1, 2, 3, 4, 5, 6].forEach((i, idx) => {
+  const h = 0.28 + Math.random() * 0.12;
+  const shelfY = [0.55, 1.15, 1.75][Math.floor(idx / 3)];
+  const bk = addBox(0.04, h, bkW[i], bookMats[i % bookMats.length], -0.04, shelfY + h/2, bkX, shelfGroup);
+  bkX += bkW[i] + 0.015;
+  if (idx === 2) bkX = -0.46;
+  if (idx === 5) bkX = -0.46;
+});
+
+// ── Drawer Cabinet ───────────────────────────────────────────────────────────
+const cabinetGroup = new THREE.Group();
+cabinetGroup.position.set(-1.5, 0, -2.8);
+scene.add(cabinetGroup);
+addBox(0.7, 0.8, 0.5, darkWoodMat, 0, 0.4, 0, cabinetGroup); // body
+
+const drawerGroup = new THREE.Group();
+cabinetGroup.add(drawerGroup);
+const drawerFront = addBox(0.62, 0.22, 0.04, woodMat, 0, 0.4, 0.27, drawerGroup);
+// Handle
+addBox(0.18, 0.03, 0.03, mat(0xc0a060, 0.3, 0.8), 0, 0.4, 0.305, drawerGroup);
+
+let drawerTargetZ = 0;
+let drawerZ = 0;
+
+// ── Floor Lamp ────────────────────────────────────────────────────────────────
+const lampGroup = new THREE.Group();
+lampGroup.position.set(-2.6, 0, 1.0);
+scene.add(lampGroup);
+// Pole
+addBox(0.04, 1.7, 0.04, mat(0x888888, 0.3, 0.8), 0, 0.85, 0, lampGroup);
+// Base
+addBox(0.28, 0.06, 0.28, mat(0x666666, 0.4, 0.7), 0, 0.03, 0, lampGroup);
+// Shade (cone-ish via scaled cylinder)
+const shadeGeo = new THREE.CylinderGeometry(0.3, 0.15, 0.35, 12);
+const shadeMesh = new THREE.Mesh(shadeGeo, shadeMat);
+shadeMesh.position.set(0, 1.85, 0);
+shadeMesh.castShadow = true;
+lampGroup.add(shadeMesh);
+// Bulb
+const bulbGeo = new THREE.SphereGeometry(0.07, 8, 8);
+const bulbMat = new THREE.MeshStandardMaterial({ color: 0xffeecc, emissive: new THREE.Color(0x000000), roughness: 0.1 });
+const bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+bulbMesh.position.set(0, 1.72, 0);
+lampGroup.add(bulbMesh);
+
+// ── Ceiling Fan ───────────────────────────────────────────────────────────────
+const fanGroup = new THREE.Group();
+fanGroup.position.set(0, RH - 0.05, 0);
+scene.add(fanGroup);
+// Mounting hub
+addBox(0.2, 0.15, 0.2, mat(0xaaaaaa, 0.4, 0.6), 0, -0.075, 0, fanGroup);
+// Drop rod
+addBox(0.05, 0.4, 0.05, mat(0x999999, 0.4, 0.6), 0, -0.35, 0, fanGroup);
+// Motor housing
+addBox(0.3, 0.18, 0.3, mat(0x888888, 0.4, 0.6), 0, -0.58, 0, fanGroup);
+
+const bladesGroup = new THREE.Group();
+bladesGroup.position.set(0, -0.56, 0);
+fanGroup.add(bladesGroup);
+// 4 blades
+for (let i = 0; i < 4; i++) {
+  const blade = box(0.7, 0.03, 0.14, mat(0xc0a060, 0.7), 0.42, 0, 0);
+  blade.rotation.y = (i / 4) * Math.PI * 2;
+  blade.castShadow = true;
+  bladesGroup.add(blade);
+}
+// Globe light
+const globeGeo = new THREE.SphereGeometry(0.15, 12, 12);
+const globeMesh = new THREE.Mesh(globeGeo, globeMat);
+globeMesh.position.set(0, -0.76, 0);
+fanGroup.add(globeMesh);
+
+let fanSpeed = 0;
+let fanTargetSpeed = 0;
+
+// ── Framed Note ───────────────────────────────────────────────────────────────
+const noteGroup = new THREE.Group();
+noteGroup.position.set(-3.82, 1.6, 0.5);
+noteGroup.rotation.y = Math.PI / 2;
+scene.add(noteGroup);
+// Frame
+addBox(0.08, 0.55, 0.42, noteFrameMat, 0, 0, 0, noteGroup);
+// Paper
+const notePaper = addBox(0.04, 0.44, 0.33, notePaperMat, 0.025, 0, 0, noteGroup);
+
+// ── Dust Particles ────────────────────────────────────────────────────────────
+const particleCount = 80;
+const positions = new Float32Array(particleCount * 3);
+const velocities = [];
+for (let i = 0; i < particleCount; i++) {
+  positions[i*3]   = (Math.random() - 0.5) * 6;
+  positions[i*3+1] = Math.random() * 2.8;
+  positions[i*3+2] = (Math.random() - 0.5) * 5;
+  velocities.push(
+    (Math.random() - 0.5) * 0.003,
+    (Math.random() - 0.5) * 0.002,
+    (Math.random() - 0.5) * 0.003
+  );
+}
+const particleGeo = new THREE.BufferGeometry();
+particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const particleMat = new THREE.PointsMaterial({
+  color: 0xffd890, size: 0.025, transparent: true, opacity: 0.0,
+  sizeAttenuation: true
+});
+const particles = new THREE.Points(particleGeo, particleMat);
+scene.add(particles);
+
+// ── Colliders ─────────────────────────────────────────────────────────────────
+const colliderMat = new THREE.MeshBasicMaterial({ visible: false });
+const colliders = [];
+
+function makeCollider(w, h, d, x, y, z, data) {
+  const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), colliderMat);
+  c.position.set(x, y, z);
+  c.userData = data;
+  scene.add(c);
+  colliders.push(c);
+  return c;
+}
+
+// Fan collider (flat disc at blade level)
+makeCollider(1.6, 0.15, 1.6, 0, RH - 0.56, 0,
+  { id: 'fan', label: 'Ceiling Fan', emissiveMeshes: [globeMesh] });
+
+// Lamp collider (tall cylinder area)
+makeCollider(0.7, 2.1, 0.7, -2.6, 1.05, 1.0,
+  { id: 'lamp', label: 'Floor Lamp', emissiveMeshes: [shadeMesh, bulbMesh] });
+
+// Drawer collider
+makeCollider(0.7, 0.28, 0.18, -1.5, 0.4, -2.53,
+  { id: 'drawer', label: 'Drawer Cabinet', emissiveMeshes: [drawerFront] });
+
+// Note collider
+makeCollider(0.12, 0.6, 0.48, -3.82, 1.6, 0.5,
+  { id: 'note', label: 'Framed Note', emissiveMeshes: [notePaper] });
+
+// ── State ──────────────────────────────────────────────────────────────────────
+const state = { fanOn: false, lampOn: false, drawerOpen: false, noteRead: false };
+const interacted = { fan: false, lamp: false, drawer: false, note: false };
+
+function countInteracted() {
+  return Object.values(interacted).filter(Boolean).length;
+}
+
+function updateUI() {
+  document.getElementById('dot-fan').classList.toggle('on', state.fanOn);
+  document.getElementById('dot-lamp').classList.toggle('on', state.lampOn);
+  document.getElementById('dot-drawer').classList.toggle('on', state.drawerOpen);
+  document.getElementById('dot-note').classList.toggle('on', state.noteRead);
+  document.getElementById('obj-count').textContent = countInteracted() + '/4';
+}
+
+function showCompletion() {
+  const banner = document.getElementById('completion-banner');
+  banner.style.display = 'block';
+  requestAnimationFrame(() => { banner.style.opacity = '1'; });
+  setTimeout(() => {
+    banner.style.opacity = '0';
+    setTimeout(() => { banner.style.display = 'none'; }, 900);
+  }, 5000);
+}
+
+// ── Restore emissive state per item ──────────────────────────────────────────
+function restoreEmissiveState(item) {
+  const id = item.userData.id;
+  if (id === 'fan') {
+    if (state.fanOn) {
+      globeMat.emissive.setHex(0xffeecc);
+      globeMat.emissiveIntensity = 0.8;
+    } else {
+      globeMat.emissive.setHex(0x000000);
+      globeMat.emissiveIntensity = 0;
+    }
+  } else if (id === 'lamp') {
+    if (state.lampOn) {
+      shadeMat.emissive.setHex(0xffcc44);
+      shadeMat.emissiveIntensity = 0.6;
+      bulbMat.emissive.setHex(0xffeecc);
+      bulbMat.emissiveIntensity = 1.5;
+    } else {
+      shadeMat.emissive.setHex(0x000000);
+      shadeMat.emissiveIntensity = 0;
+      bulbMat.emissive.setHex(0x000000);
+      bulbMat.emissiveIntensity = 0;
+    }
+  } else if (id === 'drawer') {
+    drawerFront.material.emissive.setHex(0x000000);
+    drawerFront.material.emissiveIntensity = 0;
+  } else if (id === 'note') {
+    if (state.noteRead) {
+      notePaperMat.emissive.setHex(0x302010);
+      notePaperMat.emissiveIntensity = 0.2;
+    } else {
+      notePaperMat.emissive.setHex(0x000000);
+      notePaperMat.emissiveIntensity = 0;
+    }
+  }
+}
+
+// ── Click handler ─────────────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+renderer.domElement.addEventListener('click', e => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(colliders);
+  if (!hits.length) return;
+
+  const item = hits[0].object;
+  const id = item.userData.id;
+  const wasAllDone = countInteracted() === 4;
+
+  if (id === 'fan') {
+    state.fanOn = !state.fanOn;
+    fanTargetSpeed = state.fanOn ? 0.06 : 0;
+    fanLight.intensity = state.fanOn ? 0.6 : 0;
+    if (state.fanOn) {
+      globeMat.emissive.setHex(0xffeecc);
+      globeMat.emissiveIntensity = 0.8;
+    } else {
+      globeMat.emissive.setHex(0x000000);
+      globeMat.emissiveIntensity = 0;
+    }
+    interacted.fan = true;
+
+  } else if (id === 'lamp') {
+    state.lampOn = !state.lampOn;
+    lampLight.intensity = state.lampOn ? 1.5 : 0;
+    if (state.lampOn) {
+      shadeMat.emissive.setHex(0xffcc44);
+      shadeMat.emissiveIntensity = 0.6;
+      bulbMat.emissive.setHex(0xffeecc);
+      bulbMat.emissiveIntensity = 1.5;
+    } else {
+      shadeMat.emissive.setHex(0x000000);
+      shadeMat.emissiveIntensity = 0;
+      bulbMat.emissive.setHex(0x000000);
+      bulbMat.emissiveIntensity = 0;
+    }
+    interacted.lamp = true;
+
+  } else if (id === 'drawer') {
+    state.drawerOpen = !state.drawerOpen;
+    drawerTargetZ = state.drawerOpen ? 0.35 : 0;
+    interacted.drawer = true;
+
+  } else if (id === 'note') {
+    state.noteRead = true;
+    notePaperMat.emissive.setHex(0x302010);
+    notePaperMat.emissiveIntensity = 0.2;
+    document.getElementById('info-panel').style.display = 'block';
+    interacted.note = true;
+  }
+
+  updateUI();
+  if (!wasAllDone && countInteracted() === 4) {
+    setTimeout(showCompletion, 600);
+  }
+});
+
+// ── Hover handler ─────────────────────────────────────────────────────────────
+const hoverLabel = document.getElementById('hover-label');
+let currentHover = null;
+
+renderer.domElement.addEventListener('mousemove', e => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(colliders);
+
+  if (hits.length) {
+    const item = hits[0].object;
+    if (currentHover !== item) {
+      if (currentHover) restoreEmissiveState(currentHover);
+      currentHover = item;
+      item.userData.emissiveMeshes.forEach(m => {
+        m.material.emissive.setHex(0xffaa44);
+        m.material.emissiveIntensity = 0.25;
+      });
+    }
+    renderer.domElement.style.cursor = 'pointer';
+    hoverLabel.style.display = 'block';
+    hoverLabel.style.left = e.clientX + 'px';
+    hoverLabel.style.top = e.clientY + 'px';
+    hoverLabel.textContent = item.userData.label;
+  } else {
+    if (currentHover) {
+      restoreEmissiveState(currentHover);
+      currentHover = null;
+    }
+    renderer.domElement.style.cursor = 'default';
+    hoverLabel.style.display = 'none';
+  }
+});
+
+// ── Close info panel ──────────────────────────────────────────────────────────
+document.getElementById('close-btn').addEventListener('click', () => {
+  document.getElementById('info-panel').style.display = 'none';
+});
+
+// ── Resize ────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── Animation loop ────────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const elapsed = clock.getElapsedTime();
+  const delta = clock.getDelta ? 0.016 : 0.016;
+
+  // Fan rotation
+  fanSpeed += (fanTargetSpeed - fanSpeed) * 0.03;
+  bladesGroup.rotation.y += fanSpeed;
+
+  // Drawer lerp
+  drawerZ += (drawerTargetZ - drawerZ) * 0.08;
+  drawerGroup.position.z = drawerZ;
+
+  // Ambient flicker
+  ambientLight.intensity = 0.4 + Math.sin(elapsed * 0.3) * 0.02;
+
+  // Particles
+  const fanBoost = state.fanOn ? 1.8 : 1.0;
+  const lampBoost = state.lampOn ? 1.0 : 0.0;
+  particleMat.opacity = Math.min(0.6, (state.fanOn ? 0.35 : 0) + (state.lampOn ? 0.15 : 0) + 0.05);
+
+  const pos = particleGeo.attributes.position.array;
+  for (let i = 0; i < particleCount; i++) {
+    const i3 = i * 3;
+    pos[i3]   += velocities[i3]   * fanBoost;
+    pos[i3+1] += velocities[i3+1] * fanBoost;
+    pos[i3+2] += velocities[i3+2] * fanBoost;
+    if (Math.abs(pos[i3])   > 3.5) velocities[i3]   *= -1;
+    if (pos[i3+1] > 2.9 || pos[i3+1] < 0.05) velocities[i3+1] *= -1;
+    if (Math.abs(pos[i3+2]) > 3.2) velocities[i3+2] *= -1;
+  }
+  particleGeo.attributes.position.needsUpdate = true;
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>
